@@ -9,7 +9,7 @@ It is recommended to do the following in a virtual environment.
 We use `OpenTraj` to handle the data. To install, first update the git submodule
 
 ``` sh
-git submodule --init --recursive
+git submodule update --init --recursive
 ```
 
 Then install by `pip install -e OpenTraj`
