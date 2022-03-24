@@ -1,8 +1,8 @@
 import numpy as np
-# from .abstract import TrajPredictor
+from .abstract import TrajPredictor
 
-# class ConstantVelocityKFPredictor(TrajPredictor):
-class ConstantVelocityKFPredictor():
+
+class ConstantVelocityKFPredictor(TrajPredictor):
     def __init__(self, 
                  N_future: int = 4, 
                  dt: float = 0.4,
