@@ -19,7 +19,12 @@ Then install by `pip install -e OpenTraj`
 The folder `uncertainty-motion-prediction` contains a python package of the
 project code. It includes our implementation of different methods.
 
-Install by `pip install -e uncertainty-motion-prediction`.
+Install by
+``` sh
+pip install pyclustering
+pip install -e uncertainty-motion-prediction
+
+```
 
 ## Workflow
 
