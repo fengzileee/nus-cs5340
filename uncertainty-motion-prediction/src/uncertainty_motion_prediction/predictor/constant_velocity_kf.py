@@ -1,4 +1,5 @@
 import numpy as np
+from copy import deepcopy
 from .abstract import TrajPredictor
 
 
@@ -41,8 +42,6 @@ class ConstantVelocityKFPredictor(TrajPredictor):
         self.id = np.eye(self.state_dim)
 
         # Saving the predictions of the future trajectory
-        self.future_x = []
-        self.future_P = []
 
 
     # Returns predicted trajectories
@@ -58,25 +57,6 @@ class ConstantVelocityKFPredictor(TrajPredictor):
             predicted_trajs.append(predicted)
         return np.array(predicted_trajs)
 
-
-    # Returns point estimate of most likely future trajectory, along with the
-    # uncertainty at each point, modelled as Gaussian noise
-    def sample(self, traj, count: int = 1):
-        if traj.ndim == 1:
-            raise Exception("Trajectory contains only 1 dimension")
-        elif traj.ndim == 2:
-            traj = np.expand_dims(traj, axis=0)
-
-        predicted_traj = []
-        covariances = []
-        for t in traj:
-            predicted, covariance = self._predict_single(t[:, :4])
-            predicted_traj.append(predicted)
-            covariances.append(covariance)
-
-        return np.array(predicted_traj), np.array(covariances)
-
-
     # Returns predicted trajectory
     def predict(self, traj):
         if traj.ndim == 1:
@@ -89,8 +69,8 @@ class ConstantVelocityKFPredictor(TrajPredictor):
     def _predict_single(self, traj):
         self.state_x = traj[0, :]
         self.state_P = self.P.copy()
-        self.future_x = []
-        self.future_P = []
+        future_x = []
+        future_P = []
 
         trajlen = traj.shape[0]
 
@@ -100,10 +80,10 @@ class ConstantVelocityKFPredictor(TrajPredictor):
 
         for j in range(self._N):
             self._predict()
-            self.future_x.append(self.state_x)
-            self.future_P.append(self.state_P)
+            future_x.append(self.state_x)
+            future_P.append(self.state_P)
 
-        return np.array(self.future_x), np.array(self.future_P)
+        return np.array(future_x), np.array(future_P)
 
 
     def _predict(self):
@@ -125,3 +105,34 @@ class ConstantVelocityKFPredictor(TrajPredictor):
         self.state_x = self.state_x + np.dot(K, y)
         I_KH = self.id - np.dot(K, self.H)
         self.state_P = np.dot(np.dot(I_KH, self.state_P), I_KH.T) + np.dot(np.dot(K, self.R), K.T)
+
+    # Returns point estimate of most likely future trajectory, along with the
+    # uncertainty at each point, modelled as Gaussian noise
+    def sample(self, traj, count: int = 1):
+        if traj.ndim == 1:
+            raise Exception("Trajectory contains only 1 dimension")
+
+        self.state_x = traj[0, 0:4]
+        self.state_P = self.P.copy()
+        samples = []
+
+        trajlen = traj.shape[0]
+
+        for i in range(1, trajlen):
+            self._predict()
+            self._update(traj[i, 0:4])
+
+        ############
+
+        for _ in range(count):
+            future_x = []
+            current_state = deepcopy(self.state_x)
+            current_cov = deepcopy(self.state_P)
+            for j in range(self._N):
+                mean = np.dot(self.F, current_state)
+                current_cov = np.dot(np.dot(self.F, current_cov), self.F.T) + self.Q
+                current_state = np.random.multivariate_normal(mean, current_cov)
+                future_x.append(current_state)
+            samples.append(np.array(future_x)[:, 0:2])
+
+        return np.array(samples)
