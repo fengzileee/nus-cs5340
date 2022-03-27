@@ -6,6 +6,8 @@ from pyclustering.cluster.xmeans import xmeans
 from pyclustering.cluster.silhouette import silhouette
 from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer
 
+from .hmm_multinomial import HMMMultinomialFirstOrder
+
 
 class HMMLatentSegmentsPredictor(TrajPredictor):
     def __init__(self, 
@@ -69,7 +71,7 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
             initial_centres = kmeans_plusplus_initializer(normalised, num_centres).initialize()
 
             # Run clustering
-            clustering = kmeans(normalised, initial_centres, ccore=False)
+            clustering = kmeans(normalised, initial_centres, ccore=True)
             clustering.process()
 
             # Compute the silhouette score
@@ -99,6 +101,7 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
 
         return normalised
 
+
     def _normalise_segment(self, segment):
         assert(len(segment) == self._seglen)
 
@@ -115,7 +118,7 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
 
         return canonical
 
-        
+
     # Get scaling matrix to scale all trajectory points
     def _get_canonical_scaling(self, dir):
         norm = np.linalg.norm(dir)
