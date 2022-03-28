@@ -11,17 +11,17 @@ from toolkit.core.trajdataset import TrajDataset, merge_datasets
 
 
 class Dataloader():
-    def __init__(self):
+    def __init__(self, opentraj_root="../OpenTraj/"):
         self._lut =[
-            ["eth-univ", load_eth, "../OpenTraj/datasets/ETH/seq_eth/obsmat.txt" ],
-            ["eth-hotel",load_eth, "../OpenTraj/datasets/ETH/seq_hotel/obsmat.txt" ],
-            ["ucy-zara1",load_eth, "../OpenTraj/datasets/UCY/zara01/obsmat.txt" ],
-            ["ucy-zara2",load_eth, "../OpenTraj/datasets/UCY/zara02/obsmat.txt" ],
-            ["ucy-univ3",load_eth, "../OpenTraj/datasets/UCY/students03/obsmat.txt" ],
+            ["eth-univ", load_eth, os.path.join(opentraj_root, "datasets/ETH/seq_eth/obsmat.txt")],
+            ["eth-hotel",load_eth, os.path.join(opentraj_root, "datasets/ETH/seq_hotel/obsmat.txt")],
+            ["ucy-zara1",load_eth, os.path.join(opentraj_root, "datasets/UCY/zara01/obsmat.txt")],
+            ["ucy-zara2",load_eth, os.path.join(opentraj_root, "datasets/UCY/zara02/obsmat.txt")],
+            ["ucy-univ3",load_eth, os.path.join(opentraj_root, "datasets/UCY/students03/obsmat.txt")],
             ["ucy-zara", self.load_ucy_zara, "unused" ],
             ["ucy-univ", self.load_ucy_univ, "unused" ],
         ]
-        self.opentraj_root = "../OpenTraj/"
+        self.opentraj_root = opentraj_root
         self.total_num = len(self._lut);
 
     def load(self, index):
