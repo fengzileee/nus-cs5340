@@ -1,11 +1,12 @@
-import numpy as np
-from .abstract import TrajPredictor
+from typing import List
 
+import numpy as np
 from pyclustering.cluster.kmeans import kmeans
 from pyclustering.cluster.xmeans import xmeans
 from pyclustering.cluster.silhouette import silhouette
 from pyclustering.cluster.center_initializer import kmeans_plusplus_initializer
 
+from .abstract import TrajPredictor
 from .hmm_multinomial import HMMMultinomialFirstOrder
 
 
@@ -24,7 +25,9 @@ def _get_canonical_rotation(dir):
     return np.array([[x, y], [-y, x]])
 
 
-def _normalise_segment(segment, segment_length, estimate_vel: bool = False):
+def normalise_segment(
+    segment: np.ndarray, segment_length: int, estimate_vel: bool = False
+):
     assert len(segment) == segment_length
 
     # Translate start of the trajectory to origin
@@ -41,14 +44,16 @@ def _normalise_segment(segment, segment_length, estimate_vel: bool = False):
     return canonical
 
 
-def _normalise_segment_batch(trajs, segment_length, estimate_vel: bool = False):
+def normalise_segment_batch(
+    trajs, segment_length, estimate_vel: bool = False
+) -> np.ndarray:
     normalised = []
     num_segments = trajs.shape[1] // segment_length
     for traj in trajs:
         for i in range(num_segments):
             segment = traj[i * segment_length : (i + 1) * segment_length, :]
             normalised.append(
-                _normalise_segment(segment, segment_length, estimate_vel).flatten()
+                normalise_segment(segment, segment_length, estimate_vel).flatten()
             )
 
     normalised = np.array(normalised)
@@ -57,7 +62,46 @@ def _normalise_segment_batch(trajs, segment_length, estimate_vel: bool = False):
 
 
 class KMeansOutcome:
-    def __init__(self, segment_len, center):
+    """A class to perform clustering prediction.
+
+    Args:
+        segment_len: number of steps in an observation segment
+        centers: An Nx2T array. T is the number of steps. Each row is a
+            flattened trajectory.
+    """
+
+    def __init__(self, segment_length: int, centers: np.ndarray):
+        self._seg_len = segment_length
+        self._centers = np.array(centers)
+
+    @property
+    def N(self):
+        """Number of trajectory kinds."""
+        return len(self._centers)
+
+    def classify(self, traj: np.ndarray) -> int:
+        """Classify which cluster the trajectory belongs to.
+
+        Args:
+            traj: An Tx5 or Tx4 array representing a single trajectory
+        """
+        traj = np.array(traj)[:, 0:4]
+        normalized_traj = normalise_segment(traj, self._seg_len)
+        diff = self._centers - normalized_traj.reshape([1, -1])
+        diff_norm = np.linalg.norm(diff, axis=1)
+        return np.argmin(diff_norm.flatten())
+
+    def classify_batch(self, trajs: np.ndarray) -> List[int]:
+        ret = []
+        for t in trajs:
+            ret.append(self.classify(t))
+        return ret
+
+    def generate(self, traj: np.ndarray, cluster_idx: int) -> np.ndarray:
+        """Generate the trajectory given the history trajectory.
+
+        Returns:
+        """
         pass
 
 
@@ -81,7 +125,7 @@ class HMMLatentSegmentsExtractor:
         self._n_max_centres = n_max_centres
 
     def learn_latent_segments_xmeans(self, trajs):
-        normalised = _normalise_segment_batch(trajs, self._seglen, self._estimate_vel)
+        normalised = normalise_segment_batch(trajs, self._seglen, self._estimate_vel)
 
         # Prepare initial centers - amount of initial centers defines amount of clusters from which X-Means will
         # start analysis.
@@ -106,7 +150,7 @@ class HMMLatentSegmentsExtractor:
 
     def learn_latent_segments_manual_kmeans(self, trajs):
         """Learn clusters for all numbers of clusters."""
-        normalised = _normalise_segment_batch(trajs, self._seglen, self._estimate_vel)
+        normalised = normalise_segment_batch(trajs, self._seglen, self._estimate_vel)
 
         tested_wce = []
         tested_silhouette = []
@@ -125,7 +169,9 @@ class HMMLatentSegmentsExtractor:
             # Compute the silhouette score
             clusters = clustering.get_clusters()
             silhouettes = silhouette(normalised, clusters).process().get_score()
-            silhouette_score = np.mean(np.array(silhouettes))
+            silhouettes = np.array(silhouettes)
+            silhouettes[np.isnan(silhouettes)] = 0.0  # get nan if a(i) = b(i)
+            silhouette_score = np.mean(silhouettes)
 
             # Save informations
             tested_wce.append(clustering.get_total_wce())
