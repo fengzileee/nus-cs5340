@@ -1,3 +1,5 @@
+import pickle
+from pathlib import Path
 import numpy as np
 from .hmm_base import HMMBase
 
@@ -313,3 +315,17 @@ class HMMMultinomialFirstOrder(HMMBase):
                     self._log_B[state, vk] = self._logsumexp(np.array(valid_log_probs))
                 
         self._log_B = self._log_B - np.expand_dims(summed_over_sequences, axis=0).T
+
+    def save_to_file(self, file_path):
+        data = (self._log_A, self._log_B, self._log_phi)
+        p = Path(file_path).expanduser().resolve()
+        with open(p, "wb") as _file:
+            pickle.dump(data, _file)
+
+    def load_from_file(self, file_path):
+        p = Path(file_path).expanduser().resolve()
+        with open(p, "rb") as _file:
+            log_A, log_B, log_phi = pickle.load(_file)
+        self._log_A[:, :] = log_A
+        self._log_B[:, :] = log_B
+        self._log_phi[:] = log_phi
