@@ -144,12 +144,18 @@ class KMeansOutcome:
             ret.append(self.classify(t))
         return ret
 
-    def generate(self, traj: np.ndarray, cluster_idx: int) -> np.ndarray:
-        """Generate the trajectory given the history trajectory.
+    def get_normalized_segments(self, observations: Sequence[int]) -> np.ndarray:
+        """Convert a list of integers to the normalized segments.
 
         Returns:
+            An M x N_segment_length x 2 array
         """
-        pass
+        norm_segs = []
+        for o in observations:
+            c = np.array(self._centers[o]).reshape([-1, 2])
+            assert c.shape[0] == self._seg_len, "Segment length does not match!"
+            norm_segs.append(c)
+        return np.array(norm_segs)
 
     def save_to_file(self, file_path):
         p = Path(file_path).expanduser().resolve()
@@ -239,3 +245,44 @@ class HMMLatentSegmentsExtractor:
 
         # Return all the information and clusters for visualisation and manual cluster selection
         return tested_wce, tested_silhouette, tested_clusters, tested_centres
+
+
+class HMMLatentSegmentsPredictor(TrajPredictor):
+    def __init__(
+        self,
+        hmm: HMMMultinomialFirstOrder,
+        clustering: KMeansOutcome,
+        N_future_segment: int = 1,
+        dt: float = 0.4,
+    ):
+        self._seg_len: int = clustering.segment_length
+        self._clustering: KMeansOutcome = clustering
+        self._hmm: HMMMultinomialFirstOrder = hmm
+        self._N_future_segment = N_future_segment
+        self._dt = dt
+
+    def predict(self, traj: np.ndarray):
+        traj = np.array(traj)[:, 0:4]
+        unnormalized_segments = traj.reshape([-1, self._seg_len, 4])
+        past_observations = self._clustering.classify_batch(unnormalized_segments)
+        predicted_obs_indices = self._hmm.predict_greedy(
+            past_observations, self._N_future_segment
+        )
+        predicted_obs_indices = np.array(predicted_obs_indices)
+        predicted_normalized_segments = self._clustering.get_normalized_segments(
+            predicted_obs_indices
+        )
+        predicted_denormalized_segments = []
+
+        disp = unnormalized_segments[-1, -1, 0:2] - unnormalized_segments[-1, -2, 0:2]
+        pos = unnormalized_segments[-1, -1, 0:2] + disp
+        for s in predicted_normalized_segments:
+            denormalized = denormalize_segment(s, self._seg_len, disp, pos)
+            disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
+            pos = denormalized[-1, 0:2] + disp
+            predicted_denormalized_segments.append(denormalized)
+        predicted = np.array(predicted_denormalized_segments).reshape([-1, 2])
+        return predicted
+
+    def sample(self, traj: np.ndarray, count: int = 1):
+        raise NotImplementedError("Not implemented!")
