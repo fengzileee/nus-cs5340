@@ -33,6 +33,9 @@ class DistanceErrorEvaluator:
         self.results = {"fde": fde, "ade": ade}
         return self.results
 
+    def get_metrics(self):
+        return self.metrics
+
     def hist(self):
 
         fig, axs = plt.subplots(1, len(self.metrics), figsize=(8*len(self.metrics), 5))
@@ -43,5 +46,7 @@ class DistanceErrorEvaluator:
                             alpha=0.7, rwidth=0.85)
             axs[i].set_xlabel('%s mean:%f std:%f' %(metric,np.mean(self.results[metric]),np.std(self.results[metric])))
     def statistic(self):
-        return { metric: [np.mean(self.results[metric]),np.std(self.results[metric])] for metric in  self.metrics}
+
+        return { metric: [np.mean(self.results[metric][~np.isnan(self.results[metric])]),
+                           np.std(self.results[metric][~np.isnan(self.results[metric])])] for metric in  self.metrics}
 
