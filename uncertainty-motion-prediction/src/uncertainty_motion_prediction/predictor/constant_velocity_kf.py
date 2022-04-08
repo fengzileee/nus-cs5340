@@ -4,12 +4,38 @@ from .abstract import TrajPredictor
 
 
 class ConstantVelocityKFPredictor(TrajPredictor):
+
+    def get_q(self, var=1.0):
+        dt = self._dt
+
+        G = np.matrix([[0.5*dt**2],
+               [dt]])
+        Q = G*G.T
+
+        return self._reorder_q(Q) * var
+
+    def _reorder_q(self,Q):
+
+        D = np.zeros((4, 4))
+
+        Q = np.array(Q)
+        for i, x in enumerate(Q.ravel()):
+            f = np.eye(2) * x
+            ix, iy = (i // 2) * 2, (i % 2) * 2
+            D[ix:ix+2, iy:iy+2] = f
+
+        return D
+    def update_r(self, r):
+        self.R = r
+
+
     def __init__(self, 
                  N_future: int = 4, 
                  dt: float = 0.4,
                  P = None, # uncertainty covariance
                  Q = None, # process uncertainty
-                 R = None # measurement/observation covariance
+                 R = None, # measurement/observation covariance
+                 process_var: float = 0.81
                  ):
         self._N = N_future
         self._dt = dt
@@ -21,8 +47,16 @@ class ConstantVelocityKFPredictor(TrajPredictor):
 
         # Set covariances
         self.P = np.eye(self.state_dim) if P is None else P
-        self.Q = np.eye(self.state_dim) if Q is None else Q
+        self.Q = self.get_q(process_var) if Q is None else Q
+
+        if R is None:
+            self.is_adaptive_r = True
+        else:
+            self.is_adaptive_r = False
+        # init with default
         self.R = np.eye(self.obs_dim) if R is None else R
+
+
 
         # Initialise placeholder state
         self.state_x = np.zeros((self.state_dim, 1))
@@ -73,6 +107,21 @@ class ConstantVelocityKFPredictor(TrajPredictor):
         future_P = []
 
         trajlen = traj.shape[0]
+
+
+        obs_v = traj[:,2:4]
+
+        var_v = np.matrix([[np.std(obs_v[:,0])**2, 0.0],
+                      [0.0, np.std(obs_v[:,1])**2]])
+
+        if self.is_adaptive_r:
+            R = np.eye(self.obs_dim)
+            R[2,2] = var_v[0,0]
+            R[3,3] = var_v[1,1]
+            self.update_r(R)
+
+
+
 
         for i in range(1, trajlen):
             self._predict()
