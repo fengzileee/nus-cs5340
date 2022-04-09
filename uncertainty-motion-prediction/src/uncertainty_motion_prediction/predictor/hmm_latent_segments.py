@@ -36,6 +36,7 @@ def _get_canonical_rotation(dir):
 def normalise_segment(
     segment: np.ndarray, segment_length: int, estimate_vel: bool = False
 ):
+    segment = np.array(segment)
     assert len(segment) == segment_length
 
     # Translate start of the trajectory to origin
@@ -48,16 +49,18 @@ def normalise_segment(
     if estimate_vel:
         i = 0
         while np.linalg.norm(dir) < 1e-2 and i != len(segment) - 1:
-            dir = translated[i + 1] - translated[i]
+            dir = translated[i + 1] - translated[0]
+            i += 1
     else:
         dir = segment[0, 2:4]
 
-    if np.linalg.norm(dir) > 1e-2:
-        S = _get_canonical_scaling(dir)
-        R = _get_canonical_rotation(dir)
-        canonical = np.dot(R, np.dot(S, translated.T))
-    else:
-        canonical = np.array(translated.T)
+    length_segment = 0
+    for i in range(len(segment) - 1):
+        length_segment += np.linalg.norm(segment[i] - segment[i+1])
+    # S = _get_canonical_scaling(dir)
+    S = np.array([[1.0 / length_segment, 0.0], [0.0, 1.0 / length_segment]])
+    R = _get_canonical_rotation(dir)
+    canonical = np.dot(R, np.dot(S, translated.T))
     return canonical
 
 
