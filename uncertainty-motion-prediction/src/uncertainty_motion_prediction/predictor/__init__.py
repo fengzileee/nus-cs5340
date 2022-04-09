@@ -7,4 +7,8 @@ from .hmm_latent_segments import (
     HMMLatentSegmentsExtractor,
     KMeansOutcome,
     HMMLatentSegmentsPredictor,
+    normalise_segment_batch
+)
+from .hmm_continuous_emissions import (
+    HMMContinuousEmissionsPredictor
 )
