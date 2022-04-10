@@ -5,9 +5,103 @@ from pathlib import Path
 import numpy as np
 from hmmlearn.hmm import GaussianHMM
 from .abstract import TrajPredictor
-from .hmm_latent_segments import (
-    normalise_segment, normalise_segment_batch, denormalize_segment
-)
+#from .hmm_latent_segments import (
+#    normalise_segment, normalise_segment_batch, denormalize_segment
+#)
+
+
+# Get scaling matrix to scale all trajectory points
+def _get_canonical_scaling(dir):
+    norm = np.linalg.norm(dir)
+    scaling = np.array([[1.0 / norm, 0.0], [0.0, 1.0 / norm]])
+    return scaling
+
+
+def _get_inverse_canonical_scaling(dir):
+    norm = np.linalg.norm(dir)
+    scaling = np.array([[norm, 0.0], [0.0, norm]])
+    return scaling
+
+
+# Returns the rotation matrix that transforms a unit direction vector
+# to the canonical orientation aligned with the x-axis, i.e. [x y] --> [1 0],
+# where |[x y]| == 1.
+def _get_canonical_rotation(dir):
+    x, y = dir / np.linalg.norm(dir)
+    # turn off the rotation matrix to allow more variances in the normalised data
+    return np.identity(2) #np.array([[x, y], [-y, x]])# ##
+
+
+def normalise_segment(
+    segment: np.ndarray, segment_length: int, estimate_vel: bool = False
+):
+    assert len(segment) == segment_length
+
+    # Translate start of the trajectory to origin
+    translated = segment[:, 0:2] - segment[0, 0:2]
+
+    # Compute the initial heading and magnitude of velocity. Either compute this
+    # by taking the difference of the first two trajectory points, or use the
+    # velocity in the data directly
+    dir = np.array([0, 0])
+    if estimate_vel:
+        i = 0
+        while np.linalg.norm(dir) < 1e-2 and i != len(segment) - 1:
+            dir = translated[i + 1] - translated[i]
+    else:
+        dir = segment[0, 2:4]
+
+    if np.linalg.norm(dir) > 1e-2:
+        S = _get_canonical_scaling(dir)
+        R = _get_canonical_rotation(dir)
+        canonical = np.dot(R, np.dot(S, translated.T))
+    else:
+        canonical = np.array(translated.T)
+    return canonical
+
+
+def denormalize_segment(
+    canonical: np.ndarray,
+    segment_length,
+    init_vel_vector: Sequence[float],
+    init_position: Sequence[float],
+):
+    """Denormalize a segment.
+
+    Args:
+        canonical: The normalized segment. An Nx2 array.
+        segment_length: Length of the segment.
+        init_vel_vector: A 2-element sequence. The initial velocity [vx, vy].
+        init_position: A 2-element sequence. The initial position [x, y].
+
+    Returns:
+        An Nx2 array.
+    """
+    canonical = np.array(canonical[:, 0:2])
+    assert len(canonical) == segment_length
+    S = _get_inverse_canonical_scaling(init_vel_vector)
+    R = _get_canonical_rotation(init_vel_vector)
+    segment = np.dot(R.T, np.dot(S, canonical.T)).T
+    segment = segment + np.array(init_position).reshape([1, 2])
+    return segment
+
+
+def normalise_segment_batch(
+    trajs, segment_length, estimate_vel: bool = False
+) -> np.ndarray:
+    normalised = []
+    num_segments = trajs.shape[1] // segment_length
+    for traj in trajs:
+        for i in range(num_segments):
+            segment = traj[i * segment_length : (i + 1) * segment_length, :]
+            normalised.append(
+                normalise_segment(segment, segment_length, estimate_vel).flatten()
+            )
+
+    normalised = np.array(normalised)
+
+    return normalised
+
 
 class HMMContinuousEmissionsPredictor(TrajPredictor):
     def __init__(
