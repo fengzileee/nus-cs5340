@@ -12,6 +12,16 @@ from .abstract import TrajPredictor
 from .hmm_multinomial import HMMMultinomialFirstOrder
 
 
+def segmentize_trajectory(traj, segment_length, overlap: int = 1):
+    traj = np.array(traj)
+    num_waypoints = traj.shape[0]
+    segments = []
+    assert (num_waypoints - overlap) % (segment_length - overlap) == 0
+    for start in range(0, num_waypoints - overlap, segment_length - overlap):
+        segments.append(traj[start : start + segment_length, :])
+    return np.array(segments)
+
+
 # Get scaling matrix to scale all trajectory points
 def _get_canonical_scaling(dir):
     norm = np.linalg.norm(dir)
@@ -29,13 +39,24 @@ def _get_inverse_canonical_scaling(dir):
 # to the canonical orientation aligned with the x-axis, i.e. [x y] --> [1 0],
 # where |[x y]| == 1.
 def _get_canonical_rotation(dir):
-    x, y = dir / np.linalg.norm(dir)
-    return np.array([[x, y], [-y, x]])
+    if np.linalg.norm(dir) > 1e-3:
+        x, y = dir / np.linalg.norm(dir)
+        return np.array([[x, y], [-y, x]])
+    else:
+        return np.eye(2)
+
+
+def get_segment_length(segment):
+    length_segment = 0
+    for i in range(len(segment) - 1):
+        length_segment += np.linalg.norm(segment[i] - segment[i + 1])
+    return length_segment
 
 
 def normalise_segment(
     segment: np.ndarray, segment_length: int, estimate_vel: bool = False
 ):
+    segment = np.array(segment)
     assert len(segment) == segment_length
 
     # Translate start of the trajectory to origin
@@ -48,16 +69,18 @@ def normalise_segment(
     if estimate_vel:
         i = 0
         while np.linalg.norm(dir) < 1e-2 and i != len(segment) - 1:
-            dir = translated[i + 1] - translated[i]
+            dir = translated[i + 1] - translated[0]
+            i += 1
     else:
         dir = segment[0, 2:4]
 
-    if np.linalg.norm(dir) > 1e-2:
-        S = _get_canonical_scaling(dir)
-        R = _get_canonical_rotation(dir)
-        canonical = np.dot(R, np.dot(S, translated.T))
-    else:
-        canonical = np.array(translated.T)
+    length_segment = get_segment_length(segment)
+    if length_segment < 1e-3:
+        length_segment = 1
+    # S = _get_canonical_scaling(dir)
+    S = np.array([[1.0 / length_segment, 0.0], [0.0, 1.0 / length_segment]])
+    R = _get_canonical_rotation(dir)
+    canonical = np.dot(R, np.dot(S, translated.T))
     return canonical
 
 
@@ -66,6 +89,7 @@ def denormalize_segment(
     segment_length,
     init_vel_vector: Sequence[float],
     init_position: Sequence[float],
+    scale: float,
 ):
     """Denormalize a segment.
 
@@ -80,7 +104,7 @@ def denormalize_segment(
     """
     canonical = np.array(canonical[:, 0:2])
     assert len(canonical) == segment_length
-    S = _get_inverse_canonical_scaling(init_vel_vector)
+    S = np.array([[scale, 0.0], [0.0, scale]])
     R = _get_canonical_rotation(init_vel_vector)
     segment = np.dot(R.T, np.dot(S, canonical.T)).T
     segment = segment + np.array(init_position).reshape([1, 2])
@@ -113,9 +137,12 @@ class KMeansOutcome:
             flattened trajectory.
     """
 
-    def __init__(self, segment_length: int, centers: np.ndarray):
+    def __init__(
+        self, segment_length: int, centers: np.ndarray, estimate_velocity: bool = False
+    ):
         self._seg_len = segment_length
         self._centers = np.array(centers)
+        self._estimate_vel = estimate_velocity
 
     @property
     def N(self):
@@ -133,7 +160,9 @@ class KMeansOutcome:
             traj: An Tx5 or Tx4 array representing a single trajectory
         """
         traj = np.array(traj)[:, 0:4]
-        normalized_traj = normalise_segment(traj, self._seg_len)
+        normalized_traj = normalise_segment(
+            traj, self._seg_len, estimate_vel=self._estimate_vel
+        )
         diff = self._centers - normalized_traj.reshape([1, -1])
         diff_norm = np.linalg.norm(diff, axis=1)
         return np.argmin(diff_norm.flatten())
@@ -263,7 +292,7 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
 
     def predict(self, traj: np.ndarray):
         traj = np.array(traj)[:, 0:4]
-        unnormalized_segments = traj.reshape([-1, self._seg_len, 4])
+        unnormalized_segments = segmentize_trajectory(traj, self._seg_len)
         past_observations = self._clustering.classify_batch(unnormalized_segments)
         predicted_obs_indices = self._hmm.predict_greedy(
             past_observations, self._N_future_segment
@@ -275,11 +304,12 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
         predicted_denormalized_segments = []
 
         disp = unnormalized_segments[-1, -1, 0:2] - unnormalized_segments[-1, -2, 0:2]
-        pos = unnormalized_segments[-1, -1, 0:2] + disp
+        pos = unnormalized_segments[-1, -1, 0:2]
+        scale = get_segment_length(unnormalized_segments[-1])
         for s in predicted_normalized_segments:
-            denormalized = denormalize_segment(s, self._seg_len, disp, pos)
+            denormalized = denormalize_segment(s, self._seg_len, disp, pos, scale)
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
-            pos = denormalized[-1, 0:2] + disp
+            pos = denormalized[-1]
             predicted_denormalized_segments.append(denormalized)
         predicted = np.array(predicted_denormalized_segments).reshape([-1, 2])
         return predicted

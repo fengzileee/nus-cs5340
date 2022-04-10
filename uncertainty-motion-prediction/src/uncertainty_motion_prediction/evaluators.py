@@ -12,8 +12,9 @@ class DistanceErrorEvaluator:
         N_future: number of future steps used for evaluation.
     """
 
-    def __init__(self, N_future: int = 4):
+    def __init__(self, N_future: int = 4, N_history: int = None):
         self._N = N_future
+        self._N_his = N_history
         self.metrics=['ade','fde']
 
     def evaluate(self, predictor: TrajPredictor, trajectories: np.ndarray) -> None:
@@ -21,9 +22,10 @@ class DistanceErrorEvaluator:
         assert traj_length > self._N, f"Trajectories too short! {traj_length}"
         # errors [dx, dy], dx = x_prediction - x_groundtruth
         errors = np.zeros([trajectories.shape[0], self._N, 2])
+        N_his = self._N_his if self._N_his is not None else (traj_length - self._N)
         for i in range(trajectories.shape[0]):
             prediction = predictor.predict(
-                trajectories[i, 0 : traj_length - self._N, :]
+                trajectories[i, 0 : N_his, :]
             )
             errors[i, :, :] = prediction - trajectories[i, -self._N :, 0:2]
 
