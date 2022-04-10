@@ -12,3 +12,4 @@ from .hmm_latent_segments import (
 from .hmm_continuous_emissions import (
     HMMContinuousEmissionsPredictor
 )
+from .hmm_higher_order import HMMMultinomialSecondOrder
