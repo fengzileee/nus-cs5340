@@ -44,9 +44,10 @@ class DistanceErrorEvaluator:
 
         for i in range(len(self.metrics)):
             metric = self.metrics[i]
-            n, bins, patches = axs[i].hist(x=self.results[metric], bins='auto', color='#0504aa',
+            data = self.results[metric][~np.isnan(self.results[metric])]
+            n, bins, patches = axs[i].hist(x=data, bins='auto', color='#0504aa',
                             alpha=0.7, rwidth=0.85)
-            axs[i].set_xlabel('%s mean:%f std:%f' %(metric,np.mean(self.results[metric]),np.std(self.results[metric])))
+            axs[i].set_xlabel('%s mean:%f std:%f' %(metric,np.mean(data),np.std(data)))
     def statistic(self):
 
         return { metric: [np.mean(self.results[metric][~np.isnan(self.results[metric])]),

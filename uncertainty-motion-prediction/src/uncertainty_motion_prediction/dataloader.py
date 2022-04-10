@@ -7,6 +7,8 @@ tqdm.pandas()
 
 from toolkit.loaders.loader_eth import load_eth
 from toolkit.loaders.loader_crowds import load_crowds
+from toolkit.loaders.loader_kitti import load_kitti
+from toolkit.loaders.loader_wildtrack import load_wildtrack
 from toolkit.core.trajdataset import TrajDataset, merge_datasets
 
 
@@ -15,11 +17,12 @@ class Dataloader():
         self._lut =[
             ["eth-univ", load_eth, os.path.join(opentraj_root, "datasets/ETH/seq_eth/obsmat.txt")],
             ["eth-hotel",load_eth, os.path.join(opentraj_root, "datasets/ETH/seq_hotel/obsmat.txt")],
+            #["wildtrack",self.load_wild_track, "unused"],
             ["ucy-zara1",load_eth, os.path.join(opentraj_root, "datasets/UCY/zara01/obsmat.txt")],
             ["ucy-zara2",load_eth, os.path.join(opentraj_root, "datasets/UCY/zara02/obsmat.txt")],
             ["ucy-univ3",load_eth, os.path.join(opentraj_root, "datasets/UCY/students03/obsmat.txt")],
-            #["ucy-zara", self.load_ucy_zara, "unused" ],
-            #["ucy-univ", self.load_ucy_univ, "unused" ],
+            ["ucy-zara", self.load_ucy_zara, "unused" ],
+            ["kitti",    self.load_kitti_dataset, os.path.join(opentraj_root, 'datasets/KITTI/data')],
         ]
         self.opentraj_root = opentraj_root
         self.total_num = len(self._lut);
@@ -41,13 +44,13 @@ class Dataloader():
         zara03_dir = os.path.join(self.opentraj_root, 'datasets/UCY/zara03')
         zara_01_ds = load_crowds(zara01_dir + '/annotation.vsp',
                              homog_file=zara01_dir + '/H.txt',
-                             scene_id='1', use_kalman=True)
+                             scene_id='1', use_kalman=False)
         zara_02_ds = load_crowds(zara02_dir + '/annotation.vsp',
                              homog_file=zara02_dir + '/H.txt',
-                             scene_id='2', use_kalman=True)
+                             scene_id='2', use_kalman=False)
         zara_03_ds = load_crowds(zara03_dir + '/annotation.vsp',
                              homog_file=zara03_dir + '/H.txt',
-                             scene_id='3', use_kalman=True)
+                             scene_id='3', use_kalman=False)
         return merge_datasets([zara_01_ds, zara_02_ds, zara_03_ds])
 
     def load_ucy_univ(self,path):
@@ -58,14 +61,20 @@ class Dataloader():
 
         st001_ds = load_crowds(st001_dir + '/annotation.vsp',
                                homog_file=st003_dir + '/H.txt',
-                               scene_id='st001', use_kalman=True)
+                               scene_id='st001', use_kalman=False)
 
         st003_ds = load_crowds(st003_dir + '/annotation.vsp',
                                homog_file=st003_dir + '/H.txt',
-                               scene_id='st003', use_kalman=True)
+                               scene_id='st003', use_kalman=False)
 
         uni_ex_ds = load_crowds(uni_ex_dir + '/annotation.vsp',
                                 homog_file=st003_dir + '/H.txt',
-                                scene_id='uni-ex', use_kalman=True)
+                                scene_id='uni-ex', use_kalman=False)
         return merge_datasets([st001_ds, st003_ds, uni_ex_ds])
-
+    def load_wild_track(self, path):
+        wildtrack_root = os.path.join(self.opentraj_root, 'datasets/Wild-Track/annotations_positions')
+        return load_wildtrack(wildtrack_root,
+                                                use_kalman=False,
+                                                sampling_rate=1)  # original_annot_framerate=2
+    def load_kitti_dataset(self, path):
+        return load_kitti(path, use_kalman=False, sampling_rate=4)  # FixMe: apparently original_fps = 2.5

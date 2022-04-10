@@ -22,6 +22,10 @@ project code. It includes our implementation of different methods.
 Install by
 ``` sh
 pip install pyclustering
+pip install fitter
+pip install hmmlearn
+pip install filterpy
+
 pip install -e uncertainty-motion-prediction
 
 ```
