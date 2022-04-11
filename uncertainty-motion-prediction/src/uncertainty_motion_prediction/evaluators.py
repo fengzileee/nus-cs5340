@@ -10,6 +10,10 @@ class DistanceErrorEvaluator:
 
     Args:
         N_future: number of future steps used for evaluation.
+        N_history: number of history steps. This parameter is needed when there
+            is overlapping between future and history trajecotories. If None,
+            use (trajectory_length - N_future).
+
     """
 
     def __init__(self, N_future: int = 4, N_history: int = None):

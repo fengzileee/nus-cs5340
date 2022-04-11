@@ -3,13 +3,9 @@ from pathlib import Path
 import numpy as np
 from .hmm_base import HMMBase
 
+
 class HMMMultinomialFirstOrder(HMMBase):
-    def __init__(self,
-                 state_dim,
-                 obs_dim,
-                 tol=1e-5,
-                 max_iters=200,
-                 verbose=False):
+    def __init__(self, state_dim, obs_dim, tol=1e-5, max_iters=200, verbose=False):
 
         # Initialise the dimensions first, so the overriding functions to
         # initialise the transition/observation/initial distributions have
@@ -19,7 +15,6 @@ class HMMMultinomialFirstOrder(HMMBase):
 
         # Initialise the base class
         super().__init__(tol=tol, max_iters=max_iters, verbose=verbose)
-
 
     ######################################
     ### HMM model parameter estimation ###
@@ -49,15 +44,17 @@ class HMMMultinomialFirstOrder(HMMBase):
                 seq_log_prob = self._get_sequence_log_likelihood(forward_lattice)
 
                 seq_log_gamma = forward_lattice + backward_lattice - seq_log_prob
-                seq_log_xi = np.zeros((self._state_dim, self._state_dim, T-1))
+                seq_log_xi = np.zeros((self._state_dim, self._state_dim, T - 1))
                 for i in range(self._state_dim):
                     for j in range(self._state_dim):
-                        for t in range(T-1):
-                            seq_log_xi[i, j, t] = forward_lattice[i, t] + \
-                                                  self._get_transition_model_log_prob(i, j) + \
-                                                  self._get_emission_log_prob(j, seq[t+1]) + \
-                                                  backward_lattice[j, t+1] - \
-                                                  seq_log_prob
+                        for t in range(T - 1):
+                            seq_log_xi[i, j, t] = (
+                                forward_lattice[i, t]
+                                + self._get_transition_model_log_prob(i, j)
+                                + self._get_emission_log_prob(j, seq[t + 1])
+                                + backward_lattice[j, t + 1]
+                                - seq_log_prob
+                            )
 
                 log_gammas.append(seq_log_gamma)
                 log_xis.append(seq_log_xi)
@@ -75,14 +72,15 @@ class HMMMultinomialFirstOrder(HMMBase):
             prev_log_prob = curr_log_prob
             curr_log_prob = average_seq_log_likelihood / float(N)
             if self._verbose:
-                print(f'Iter {itr}, log-likelihood loss: {curr_log_prob}, delta: {abs(prev_log_prob - curr_log_prob)}')
-
+                print(
+                    f"Iter {itr}, log-likelihood loss: {curr_log_prob}, delta: {abs(prev_log_prob - curr_log_prob)}"
+                )
 
     #######################################################################
     ### Sequence likelihood estimation, forward and backward algorithms ###
     #######################################################################
 
-    # Compute the likelihood of seeing the sequence x under 
+    # Compute the likelihood of seeing the sequence x under
     # the current HMM model
     def get_sequence_likelihood(self, x):
         lattice = self._forward(x)
@@ -96,23 +94,32 @@ class HMMMultinomialFirstOrder(HMMBase):
     # as get_sequence_likelihood, up to numerical rounding.
     def get_sequence_likelihood_backward(self, x):
         lattice = self._backward(x)
-        log_probs = lattice[:, 0] + self._log_phi + self._get_emission_log_prob_batch(x[0])
+        log_probs = (
+            lattice[:, 0] + self._log_phi + self._get_emission_log_prob_batch(x[0])
+        )
         log_prob = self._logsumexp(log_probs)
         return np.exp(log_prob)
 
     def _get_sequence_log_likelihood(self, forward_lattice):
-        return self._logsumexp(forward_lattice[:, -1]) # P(O|lambda), probability of observing sequence given parameters
+        return self._logsumexp(
+            forward_lattice[:, -1]
+        )  # P(O|lambda), probability of observing sequence given parameters
 
     # Takes in a sequence of length T and computes the alpha values for that sequence
     def _forward(self, x):
         T = len(x)
         dp_table = np.zeros((self._state_dim, T))
         for state in range(self._state_dim):
-            dp_table[state, 0] = self._log_phi[state] + self._get_emission_log_prob(state, x[0])
+            dp_table[state, 0] = self._log_phi[state] + self._get_emission_log_prob(
+                state, x[0]
+            )
         for t in range(1, T):
-            prev_alphas =  dp_table[:, t-1]            
+            prev_alphas = dp_table[:, t - 1]
             for state in range(self._state_dim):
-                single_transition_log_probs = prev_alphas + self._get_transition_model_log_prob_batch(state, dst=True)
+                single_transition_log_probs = (
+                    prev_alphas
+                    + self._get_transition_model_log_prob_batch(state, dst=True)
+                )
                 single_transition_log_probs += self._get_emission_log_prob(state, x[t])
                 dp_table[state, t] = self._logsumexp(single_transition_log_probs)
         return dp_table
@@ -121,15 +128,16 @@ class HMMMultinomialFirstOrder(HMMBase):
     def _backward(self, x):
         T = len(x)
         dp_table = np.zeros((self._state_dim, T))
-        for t in range(T-2, -1, -1):
-            prev_betas = dp_table[:, t+1]
+        for t in range(T - 2, -1, -1):
+            prev_betas = dp_table[:, t + 1]
             for state in range(self._state_dim):
-                single_transition_log_probs =  (prev_betas 
+                single_transition_log_probs = (
+                    prev_betas
                     + self._get_transition_model_log_prob_batch(state, dst=False)
-                    + self._get_emission_log_prob_batch(x[t+1]))
+                    + self._get_emission_log_prob_batch(x[t + 1])
+                )
                 dp_table[state, t] = self._logsumexp(single_transition_log_probs)
         return dp_table
-
 
     ########################
     ### Viterbi decoding ###
@@ -146,30 +154,31 @@ class HMMMultinomialFirstOrder(HMMBase):
         log_path_probs[:, 0] = self._log_phi + self._get_emission_log_prob_batch(x[0])
 
         for t in range(1, T):
-            log_probs_prev_timestep = log_path_probs[:, t-1]
+            log_probs_prev_timestep = log_path_probs[:, t - 1]
             for state in range(self._state_dim):
-                updated_probs = log_probs_prev_timestep + \
-                                self._get_transition_model_log_prob_batch(state, dst=True)
+                updated_probs = (
+                    log_probs_prev_timestep
+                    + self._get_transition_model_log_prob_batch(state, dst=True)
+                )
                 updated_probs += self._get_emission_log_prob(state, x[t])
                 log_path_probs[state, t] = np.max(updated_probs)
                 backpointers[state, t] = np.argmax(updated_probs)
 
         best_log_path_prob = np.max(log_path_probs[:, -1])
         best_path_pointer = np.argmax(log_path_probs[:, -1])
-        
+
         best_path = [best_path_pointer]
-        for t in range(T-1, 0, -1):
+        for t in range(T - 1, 0, -1):
             best_path.append(backpointers[best_path[-1], t])
 
         return best_path[::-1], np.exp(best_log_path_prob)
-
 
     ##################
     ### Prediction ###
     ##################
 
     # Does greedy prediction of the succeeding states, solely by
-    # looking for the transition from the current state that 
+    # looking for the transition from the current state that
     # has the highest probability, moving to the next state and
     # selecting the emission from that state with the highest
     # probability
@@ -178,7 +187,9 @@ class HMMMultinomialFirstOrder(HMMBase):
         state = best_path[-1]
         emissions = []
         for n in range(N_future):
-            state = np.argmax(self._get_transition_model_log_prob_batch(state, dst=False))
+            state = np.argmax(
+                self._get_transition_model_log_prob_batch(state, dst=False)
+            )
             emissions.append(np.argmax(self._log_B[state, :]))
         return emissions
 
@@ -192,20 +203,47 @@ class HMMMultinomialFirstOrder(HMMBase):
     def predict_brute_force(self, x, N_future):
         raise Exception("TODO: Implement this function")
 
+    ################
+    ### Sampling ###
+    ################
+
+    def sample(self, x, N_future: int = 1):
+        """Given a sequence of history obs, sample future obs."""
+        best_path, best_path_prob = self.decode(x)
+        state = best_path[-1]
+        emissions = []
+        for n in range(N_future):
+            state = np.argmax(
+                np.random.multinomial(
+                    1,
+                    np.exp(self._get_transition_model_log_prob_batch(state, dst=False)),
+                )
+            )
+            obs = np.argmax(np.random.multinomial(1, np.exp(self._log_B[state, :])))
+            emissions.append(obs)
+        return emissions
 
     ################################
     ### HMM model initialisation ###
     ################################
 
     def _initialise_transition_model_rand(self):
-        self._log_A = [np.log(np.random.dirichlet([1 for i in range(self._state_dim)])) for i in range(self._state_dim)]
+        self._log_A = [
+            np.log(np.random.dirichlet([1 for i in range(self._state_dim)]))
+            for i in range(self._state_dim)
+        ]
         self._log_A = np.array(self._log_A)
 
     def _initialise_prior_distribution_rand(self):
-        self._log_phi = np.log(np.random.dirichlet([1 for i in range(self._state_dim)]).flatten())
+        self._log_phi = np.log(
+            np.random.dirichlet([1 for i in range(self._state_dim)]).flatten()
+        )
 
     def _initialise_emission_model_rand(self):
-        self._log_B = [np.log(np.random.dirichlet([1 for i in range(self._obs_dim)])) for i in range(self._state_dim)]
+        self._log_B = [
+            np.log(np.random.dirichlet([1 for i in range(self._obs_dim)]))
+            for i in range(self._state_dim)
+        ]
         self._log_B = np.array(self._log_B)
 
     def _initialise_transition_model(self, transition_matrix):
@@ -218,14 +256,13 @@ class HMMMultinomialFirstOrder(HMMBase):
         self._log_B = np.log(emission_matrix)
 
     def initialise_parameters(self, transition_matrix, prior, emission_matrix):
-        assert(transition_matrix.shape == (self._state_dim, self._state_dim))
-        assert(len(prior) == self._state_dim)
-        assert(emission_matrix.shape == (self._state_dim, self._obs_dim))
+        assert transition_matrix.shape == (self._state_dim, self._state_dim)
+        assert len(prior) == self._state_dim
+        assert emission_matrix.shape == (self._state_dim, self._obs_dim)
 
         self._initialise_transition_model(transition_matrix)
         self._initialise_prior_distribution(prior)
         self._initialise_emission_model(emission_matrix)
-
 
     #####################################
     ### Querying HMM model parameters ###
@@ -234,7 +271,7 @@ class HMMMultinomialFirstOrder(HMMBase):
     # Get transition from i --> j
     def _get_transition_model_log_prob(self, i, j):
         return self._log_A[i, j]
-    
+
     def _get_prior_log_prob(self, state):
         return self._log_phi[state]
 
@@ -254,7 +291,6 @@ class HMMMultinomialFirstOrder(HMMBase):
     def _get_emission_log_prob_batch(self, obs):
         return self._log_B[:, obs]
 
-
     #####################################
     ### Updating HMM model parameters ###
     #####################################
@@ -265,16 +301,21 @@ class HMMMultinomialFirstOrder(HMMBase):
         # (num seq, num states, num states, traj len).
         # Each value log_xis[k, i, j, t] represents the
         # log transition probability of i --> j at timestep t
-        # for the kth sequence. 
+        # for the kth sequence.
         #
-        # For each state-state pair, sum the gammas over all timesteps 
+        # For each state-state pair, sum the gammas over all timesteps
         # for all sequences. To transform the sum into a probability
         # measure, normalise by summing over the destination states.
         summed_over_timesteps = np.apply_along_axis(self._logsumexp, 3, log_xis)
-        summed_over_sequences = np.apply_along_axis(self._logsumexp, 0, summed_over_timesteps)
-        summed_over_dst_state = np.apply_along_axis(self._logsumexp, 1, summed_over_sequences)
-        self._log_A = summed_over_sequences - np.expand_dims(summed_over_dst_state, axis=0).T
-
+        summed_over_sequences = np.apply_along_axis(
+            self._logsumexp, 0, summed_over_timesteps
+        )
+        summed_over_dst_state = np.apply_along_axis(
+            self._logsumexp, 1, summed_over_sequences
+        )
+        self._log_A = (
+            summed_over_sequences - np.expand_dims(summed_over_dst_state, axis=0).T
+        )
 
     # Updates the prior log probabilities. Effectively finding for each state
     # the expected frequency of being in that state at the first timestep in
@@ -287,7 +328,9 @@ class HMMMultinomialFirstOrder(HMMBase):
         # for each state.
         N = log_gammas.shape[0]
         log_gammas_t0 = log_gammas[:, :, 0]
-        self._log_phi = np.apply_along_axis(self._logsumexp, 0, log_gammas_t0) - np.log(N)
+        self._log_phi = np.apply_along_axis(self._logsumexp, 0, log_gammas_t0) - np.log(
+            N
+        )
 
     # Updates the emission model's log probabilities.
     def _update_emission_model(self, log_gammas, X):
@@ -296,7 +339,9 @@ class HMMMultinomialFirstOrder(HMMBase):
         # factor by summing over all data, i.e. both num seq and traj len
         N, T = X.shape
         summed_over_timesteps = np.apply_along_axis(self._logsumexp, 2, log_gammas)
-        summed_over_sequences = np.apply_along_axis(self._logsumexp, 0, summed_over_timesteps)
+        summed_over_sequences = np.apply_along_axis(
+            self._logsumexp, 0, summed_over_timesteps
+        )
 
         # Compute the log likelihood of the emission distribution as the
         # expected no. of times we encounter emission vk in state i over
@@ -313,7 +358,7 @@ class HMMMultinomialFirstOrder(HMMBase):
                     self._log_B[state, vk] = -np.inf
                 else:
                     self._log_B[state, vk] = self._logsumexp(np.array(valid_log_probs))
-                
+
         self._log_B = self._log_B - np.expand_dims(summed_over_sequences, axis=0).T
 
     def save_to_file(self, file_path):
