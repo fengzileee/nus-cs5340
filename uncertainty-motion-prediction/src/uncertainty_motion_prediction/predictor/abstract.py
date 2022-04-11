@@ -31,5 +31,8 @@ class TrajPredictor(ABC):
 
         Might not be necessary when the conditionional distribution has closed
         form expression (e.g., Gaussian distribution).
+
+        Returns:
+            An MxNx2 array.
         """
         pass

@@ -181,7 +181,7 @@ class KMeansOutcome:
         """
         norm_segs = []
         for o in observations:
-            c = np.array(self._centers[o]).reshape([-1, 2])
+            c = np.array(self._centers[o]).reshape([2, -1]).T
             assert c.shape[0] == self._seg_len, "Segment length does not match!"
             norm_segs.append(c)
         return np.array(norm_segs)
@@ -298,14 +298,29 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
             past_observations, self._N_future_segment
         )
         predicted_obs_indices = np.array(predicted_obs_indices)
+        return self._observations_to_trajectory(
+            predicted_obs_indices, unnormalized_segments
+        )
+
+    def sample(self, traj: np.ndarray, count: int = 1):
+        traj = np.array(traj)[:, 0:4]
+        unnormalized_segments = segmentize_trajectory(traj, self._seg_len)
+        past_observations = self._clustering.classify_batch(unnormalized_segments)
+        samples = []
+        for _ in range(count):
+            obs = self._hmm.sample(past_observations, N_future=self._N_future_segment)
+            samples.append(self._observations_to_trajectory(obs, unnormalized_segments))
+        return np.array(samples)
+
+    def _observations_to_trajectory(self, predicted_obs_indices, unnormalized_segments):
+        disp = unnormalized_segments[-1, -1, 0:2] - unnormalized_segments[-1, -2, 0:2]
+        pos = unnormalized_segments[-1, -1, 0:2]
+        scale = get_segment_length(unnormalized_segments[-1])
         predicted_normalized_segments = self._clustering.get_normalized_segments(
             predicted_obs_indices
         )
         predicted_denormalized_segments = []
 
-        disp = unnormalized_segments[-1, -1, 0:2] - unnormalized_segments[-1, -2, 0:2]
-        pos = unnormalized_segments[-1, -1, 0:2]
-        scale = get_segment_length(unnormalized_segments[-1])
         for s in predicted_normalized_segments:
             denormalized = denormalize_segment(s, self._seg_len, disp, pos, scale)
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
@@ -313,6 +328,3 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
             predicted_denormalized_segments.append(denormalized)
         predicted = np.array(predicted_denormalized_segments).reshape([-1, 2])
         return predicted
-
-    def sample(self, traj: np.ndarray, count: int = 1):
-        raise NotImplementedError("Not implemented!")
