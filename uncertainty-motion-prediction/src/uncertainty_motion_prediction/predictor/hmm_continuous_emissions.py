@@ -9,7 +9,6 @@ from .abstract import TrajPredictor
 #    normalise_segment, normalise_segment_batch, denormalize_segment
 #)
 
-
 # Get scaling matrix to scale all trajectory points
 def _get_canonical_scaling(dir):
     norm = np.linalg.norm(dir)
@@ -27,14 +26,24 @@ def _get_inverse_canonical_scaling(dir):
 # to the canonical orientation aligned with the x-axis, i.e. [x y] --> [1 0],
 # where |[x y]| == 1.
 def _get_canonical_rotation(dir):
-    x, y = dir / np.linalg.norm(dir)
-    # turn off the rotation matrix to allow more variances in the normalised data
-    return np.identity(2) #np.array([[x, y], [-y, x]])# ##
+    if np.linalg.norm(dir) > 1e-3:
+        x, y = dir / np.linalg.norm(dir)
+        return np.array([[x, y], [-y, x]]) #np.identity(2)
+    else:
+        return np.eye(2)
+
+
+def get_segment_length(segment):
+    length_segment = 0
+    for i in range(len(segment) - 1):
+        length_segment += np.linalg.norm(segment[i] - segment[i + 1])
+    return length_segment
 
 
 def normalise_segment(
     segment: np.ndarray, segment_length: int, estimate_vel: bool = False
 ):
+    segment = np.array(segment)
     assert len(segment) == segment_length
 
     # Translate start of the trajectory to origin
@@ -47,16 +56,18 @@ def normalise_segment(
     if estimate_vel:
         i = 0
         while np.linalg.norm(dir) < 1e-2 and i != len(segment) - 1:
-            dir = translated[i + 1] - translated[i]
+            dir = translated[i + 1] - translated[0]
+            i += 1
     else:
         dir = segment[0, 2:4]
 
-    if np.linalg.norm(dir) > 1e-2:
-        S = _get_canonical_scaling(dir)
-        R = _get_canonical_rotation(dir)
-        canonical = np.dot(R, np.dot(S, translated.T))
-    else:
-        canonical = np.array(translated.T)
+    length_segment = get_segment_length(segment)
+    if length_segment < 1e-3:
+        length_segment = 1
+    # S = _get_canonical_scaling(dir)
+    S = np.array([[1.0 / length_segment, 0.0], [0.0, 1.0 / length_segment]])
+    R = _get_canonical_rotation(dir)
+    canonical = np.dot(R, np.dot(S, translated.T))
     return canonical
 
 
@@ -65,6 +76,7 @@ def denormalize_segment(
     segment_length,
     init_vel_vector: Sequence[float],
     init_position: Sequence[float],
+    scale: float,
 ):
     """Denormalize a segment.
 
@@ -79,7 +91,7 @@ def denormalize_segment(
     """
     canonical = np.array(canonical[:, 0:2])
     assert len(canonical) == segment_length
-    S = _get_inverse_canonical_scaling(init_vel_vector)
+    S = np.array([[scale, 0.0], [0.0, scale]])
     R = _get_canonical_rotation(init_vel_vector)
     segment = np.dot(R.T, np.dot(S, canonical.T)).T
     segment = segment + np.array(init_position).reshape([1, 2])
@@ -101,6 +113,7 @@ def normalise_segment_batch(
     normalised = np.array(normalised)
 
     return normalised
+
 
 
 class HMMContinuousEmissionsPredictor(TrajPredictor):
@@ -134,14 +147,16 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
         predicted_normalised_segments = []
         for _ in range(self._N_future_segment):
             predicted_next_z = np.argmax(self._hmm.transmat_[current_state])
-            predicted_normalised_segments.append(self._hmm.means_[predicted_next_z].reshape([-1, 2]))
+            predicted_normalised_segments.append(self._hmm.means_[predicted_next_z].reshape([2, -1]).T)
             current_state = predicted_next_z
 
         disp = traj_segments[-1, -1, 0:2] - traj_segments[-1, -2, 0:2]
         pos = traj_segments[-1, -1, 0:2] + disp
+        scale = get_segment_length(traj_segments[-1])
+
         predicted_denormalised_segments = []
         for s in predicted_normalised_segments:
-            denormalized = denormalize_segment(s, self._seg_len, disp, pos)
+            denormalized = denormalize_segment(s, self._seg_len, disp, pos, scale)
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
             pos = denormalized[-1, 0:2] + disp
             predicted_denormalised_segments.append(denormalized)
