@@ -49,12 +49,13 @@ class SamplingVisualizer:
             (h_samples,) = axis.plot(
                 s[:, 0], s[:, 1], linewidth=0.5, alpha=0.2, c=[0.5, 0.5, 0.5]
             )
-        (h_data,) = axis.plot(trajectory[:, 0], trajectory[:, 1], linewidth=2)
+        (h_his,) = axis.plot(trajectory[0:N_his, 0], trajectory[0:N_his, 1], "-o", linewidth=2)
         (h_pred,) = axis.plot(point_est[:, 0], point_est[:, 1], "-o", linewidth=2)
+        (h_future,) = axis.plot(trajectory[N_his-1:, 0], trajectory[N_his-1:, 1], "-o", linewidth=2)
 
         axis.legend(
-            handles=[h_data, h_pred, h_samples],
-            labels=["Groundtruth", "Point Estimate", "Samples"],
+            handles=[h_his, h_future, h_pred, h_samples],
+            labels=["History", "Groundtruth", "Point Estimate", "Samples"],
         )
 
 

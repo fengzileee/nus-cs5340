@@ -201,7 +201,22 @@ class HMMMultinomialFirstOrder(HMMBase):
     # states with the highest observation probability is selected
     # as the prediction.
     def predict_brute_force(self, x, N_future):
-        raise Exception("TODO: Implement this function")
+        # Seems to be computationally intractable
+        grids = N_future * [list(range(self._obs_dim))]
+        candidates = (
+            np.array(np.meshgrid(*grids)).reshape([N_future, -1]).T.tolist()
+        )
+        assert len(candidates[0]) == N_future
+        current_best_future = candidates[0]
+        current_best_likelihood = -np.inf
+        for c in candidates:
+            all_observations = list(x)
+            all_observations.extend(c)
+            new_likelihood = self.get_sequence_likelihood(all_observations)
+            if new_likelihood > current_best_likelihood:
+                current_best_future = c
+                current_best_likelihood = new_likelihood
+        return current_best_future
 
     ################
     ### Sampling ###

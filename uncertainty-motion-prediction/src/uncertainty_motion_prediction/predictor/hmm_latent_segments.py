@@ -308,13 +308,18 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
         self._N_future_segment = N_future_segment
         self._dt = dt
 
-    def predict(self, traj: np.ndarray):
+    def predict(self, traj: np.ndarray, brute_force: bool = False):
         traj = np.array(traj)[:, 0:4]
         unnormalized_segments = segmentize_trajectory(traj, self._seg_len)
         past_observations = self._clustering.classify_batch(unnormalized_segments)
-        predicted_obs_indices = self._hmm.predict_greedy(
-            past_observations, self._N_future_segment
-        )
+        if brute_force:
+            predicted_obs_indices = self._hmm.predict_brute_force(
+                past_observations, self._N_future_segment
+            )
+        else:
+            predicted_obs_indices = self._hmm.predict_greedy(
+                past_observations, self._N_future_segment
+            )
         predicted_obs_indices = np.array(predicted_obs_indices)
         return self._observations_to_trajectory(
             predicted_obs_indices, unnormalized_segments
