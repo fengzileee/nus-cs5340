@@ -21,7 +21,7 @@ class Dataloader():
             ["ucy-zara1",self.load_eth_dataset, os.path.join(opentraj_root, "datasets/UCY/zara01/obsmat.txt")],
             ["ucy-zara2",self.load_eth_dataset, os.path.join(opentraj_root, "datasets/UCY/zara02/obsmat.txt")],
             ["ucy-univ3",self.load_eth_dataset, os.path.join(opentraj_root, "datasets/UCY/students03/obsmat.txt")],
-            ["ucy-zara", self.load_ucy_zara, "unused" ],
+            #["ucy-zara", self.load_ucy_zara, "unused" ],
             #["kitti",    self.load_kitti_dataset, os.path.join(opentraj_root, 'datasets/KITTI/data')],
         ]
         self.opentraj_root = opentraj_root
