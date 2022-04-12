@@ -12,14 +12,32 @@ from .abstract import TrajPredictor
 from .hmm_multinomial import HMMMultinomialFirstOrder
 
 
-def segmentize_trajectory(traj, segment_length, overlap: int = 1):
+def segmentize_trajectory(traj, segment_length):
     traj = np.array(traj)
     num_waypoints = traj.shape[0]
     segments = []
+    overlap = 1
     assert (num_waypoints - overlap) % (segment_length - overlap) == 0
     for start in range(0, num_waypoints - overlap, segment_length - overlap):
         segments.append(traj[start : start + segment_length, :])
     return np.array(segments)
+
+
+def desegmentize_trajectory(segments: np.ndarray):
+    """Turn a list of segments into a trajectory.
+
+    Args:
+        segments: An MxNxP array. M: number of segments. N: segment length. P:
+            number of data at each time step.
+        overlap: Assume to be 1.
+    """
+    segments = np.array(segments)
+    overlap = 1
+    seglen = segments.shape[1]
+    traj = segments[0]
+    for i in range(1, segments.shape[0]):
+        traj = np.vstack((traj, segments[i, overlap:, :]))
+    return np.array(traj)
 
 
 # Get scaling matrix to scale all trajectory points
@@ -326,5 +344,5 @@ class HMMLatentSegmentsPredictor(TrajPredictor):
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
             pos = denormalized[-1]
             predicted_denormalized_segments.append(denormalized)
-        predicted = np.array(predicted_denormalized_segments).reshape([-1, 2])
+        predicted = desegmentize_trajectory(predicted_denormalized_segments)
         return predicted

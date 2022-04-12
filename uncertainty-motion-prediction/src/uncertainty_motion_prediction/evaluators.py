@@ -31,6 +31,7 @@ class DistanceErrorEvaluator:
             prediction = predictor.predict(
                 trajectories[i, 0 : N_his, :]
             )
+            assert prediction.shape[0] == self._N, f"Wrong prediction shape {prediction.shape}"
             errors[i, :, :] = prediction - trajectories[i, -self._N :, 0:2]
 
         distance_errors = np.linalg.norm(errors, axis=2, ord=2)
