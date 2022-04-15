@@ -138,7 +138,7 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
             normalised.append(normalise_segment(segment, len(segment)).flatten())
         normalised = np.array(normalised)
         
-        Z = self._hmm.predict(normalised)
+        Z = self._hmm.predict(normalised[:,np.r_[1:4,5:8]])
         current_state = Z[-1]
 
         # Based on the fitted latent states, we predict the next latent state
@@ -156,6 +156,7 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
 
         predicted_denormalised_segments = []
         for s in predicted_normalised_segments:
+            s = np.insert(s,0,np.array([0, 0]), axis=0)
             denormalized = denormalize_segment(s, self._seg_len, disp, pos, scale)
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
             pos = denormalized[-1, 0:2] + disp
