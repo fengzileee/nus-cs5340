@@ -33,8 +33,6 @@ def segmentize_trajectory(traj, segment_length):
     num_waypoints = traj.shape[0]
     segments = []
     overlap = 1
-    print (num_waypoints - overlap)
-    print (segment_length - overlap)
     assert (num_waypoints - overlap) % (segment_length - overlap) == 0
     for start in range(0, num_waypoints - overlap, segment_length - overlap):
         segments.append(traj[start : start + segment_length, :])
@@ -164,8 +162,9 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
     def predict(self, traj: np.ndarray):
         
         traj = np.array(traj)[:, 0:4]
-        print('traj', traj.shape)
+        #print('traj', traj)
         traj_segments = segmentize_trajectory(traj, self._seg_len)
+        #print('traj_segments', traj_segments)
 
  #       assert(traj.shape[0] % self._seg_len == 0)
  #       traj_segments = traj[:, 0:4].reshape(-1, self._seg_len, 4)
@@ -174,7 +173,7 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
         for segment in traj_segments:
             normalised.append(normalise_segment(segment, len(segment)).flatten())
         normalised = np.array(normalised)
-        print('normalised', normalised.shape)
+        #print('normalised', normalised)
 
         Z = self._hmm.predict(normalised[:,np.r_[1:4,5:8]])
         current_state = Z[-1]
@@ -183,15 +182,15 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
         # and take the mode of the Gaussian observation distribution as the
         # predicted MLE observation
         predicted_normalised_segments = []
-        print('_N_future_segment', self._N_future_segment)
+        #print('_N_future_segment', self._N_future_segment)
         for _ in range(self._N_future_segment):
             predicted_next_z = np.argmax(self._hmm.transmat_[current_state])
             predicted_normalised_segments.append(self._hmm.means_[predicted_next_z].reshape([2, -1]).T)
             current_state = predicted_next_z
-        print('predicted_normalised_segments', np.array(predicted_normalised_segments).shape)
+        #print('predicted_normalised_segments', np.array(predicted_normalised_segments).shape)
 
         disp = traj_segments[-1, -1, 0:2] - traj_segments[-1, -2, 0:2]
-        pos = traj_segments[-1, -1, 0:2] + disp
+        pos = traj_segments[-1, -1, 0:2] #+ disp
         scale = get_segment_length(traj_segments[-1])
 
         predicted_denormalised_segments = []
@@ -199,7 +198,7 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
             s = np.insert(s,0,np.array([0, 0]), axis=0)
             denormalized = denormalize_segment(s, self._seg_len, disp, pos, scale)
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
-            pos = denormalized[-1, 0:2] + disp
+            pos = denormalized[-1, 0:2] #+ disp
             predicted_denormalised_segments.append(denormalized)
         
         predicted = desegmentize_trajectory(predicted_denormalised_segments)
@@ -210,9 +209,9 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
 
     def sample(self, traj: np.ndarray, N_future: int = 1,count: int = 1):
         traj = np.array(traj)[:, 0:4]
-        print('samples: traj',traj)
+        #print('samples: traj',traj)
         unnormalized_segments = segmentize_trajectory(traj, self._seg_len)
-        print('samples: unnormalized_segments',unnormalized_segments)
+        #print('samples: unnormalized_segments',unnormalized_segments)
 
         normalised = []
         for segment in unnormalized_segments:
@@ -228,22 +227,24 @@ class HMMContinuousEmissionsPredictor(TrajPredictor):
 
         for _ in range(count):
             X, state_sequence = self._hmm.sample(n_samples=self._N_future_segment, currstate=state)
+            #print(X)
             samples.append(self._observations_to_trajectory(X, unnormalized_segments))
         return np.array(samples)
 
 
-    def _observations_to_trajectory(self, predicted_normalized_segments, traj_segments):
+    def _observations_to_trajectory(self, predicted_normalised_segments, traj_segments):
  
         disp = traj_segments[-1, -1, 0:2] - traj_segments[-1, -2, 0:2]
-        pos = traj_segments[-1, -1, 0:2] + disp
+        pos = traj_segments[-1, -1, 0:2] # + disp
         scale = get_segment_length(traj_segments[-1])
 
         predicted_denormalised_segments = []
         for s in predicted_normalised_segments:
+            s = s.reshape([2, -1]).T
             s = np.insert(s,0,np.array([0, 0]), axis=0)
             denormalized = denormalize_segment(s, self._seg_len, disp, pos, scale)
             disp = denormalized[-1, 0:2] - denormalized[-2, 0:2]
-            pos = denormalized[-1, 0:2] + disp
+            pos = denormalized[-1, 0:2] # + disp
             predicted_denormalised_segments.append(denormalized)
 
         predicted = np.array(predicted_denormalised_segments).reshape([-1, 2])
